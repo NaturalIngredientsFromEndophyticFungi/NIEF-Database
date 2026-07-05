@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Natural Ingredients from Endophytic Fungi — Database</title>
+
+<!--
+  ╔══════════════════════════════════════════════════════════════════════╗
+  ║  Este sitio lee UN libro de Excel (.xlsx) con 4 hojas:                ║
+  ║    • Summary                     → contadores de la portada          ║
+  ║    • Ingredients                 → galería + fichas                  ║
+  ║    • Secondary screening         → gráficas por criterio            ║
+  ║    • Catalog of the Top Value-added → catálogo con estructuras       ║
+  ║  Pon el archivo como  data.xlsx  en esta carpeta, o súbelo con el    ║
+  ║  botón. Los nombres de columna se comparan sin distinguir mayúsculas.║
+  ╚══════════════════════════════════════════════════════════════════════╝
+-->
+<script>
+const CONFIG = {
+  projectName: "Natural Ingredients from Endophytic Fungi",
+  projectShort: "NIEF Database",
+  tagline: "An open database of natural ingredients derived from endophytic fungi — their producing strains, fermentation details, reported bioactivities, prioritization scoring and top value-added candidates.",
+
+  dataFiles: ["data.xlsx", "data.csv"],
+
+  // Cómo se reconoce cada hoja (por su nombre)
+  sheetMatch: {
+    catalog:     /catalog|top.?value/i,
+    screening:   /secondary|screening/i,
+    summary:     /summary/i,
+    ingredients: /ingredient/i
+  },
+
+  summaryFields:   { name:"Ingredient name", fungus:"Producing Endophytic Fungus" },
+
+  ingredientFields:{
+    name:"Ingredient Name", type:"Type of Compound", bioactivity:"Reported Bioactivity",
+    fungus:"Producing Endophytic Fungus", fermentationType:"Type of Fermentation",
+    fermentationStrategy:"Fermentation Strategy", reactor:"Reactor Configuration",
+    medium:"Culture Medium", doi:"DOI", reference:"Reference"
+  },
+
+  screeningFields: { name:"Natural Ingredient", finalScore:"Final Weighted Score" },
+  criterionTitles: {
+    "Criterion 1": "Availability and cost of the main substrate (macronutrient)",
+    "Criterion 2": "Demand and competitiveness in the natural ingredient market",
+    "Criterion 3": "Potential of natural ingredient as an intermediate component",
+    "Criterion 4": "Level of process validation and preparation for bioindustrial manufacture",
+    "Criterion 5": "Regulatory complexity for insertion in the natural ingredient market"
+  },
+
+  catalogFields:   {
+    name:"Natural Ingredient", score:"Score", type:"Type of compound", image:"Imagen",
+    order:"Orden", fungus:"Producing endophytic fungus", bioactivity:"Bioactivity",
+    areas:"Areas of interest", reference:"Reference"
+  },
+
+  areaOptions: ["Cosmetics", "Animal Health", "Food technology", "Human Health", "Agro-technology"],
+
+  screeningIntro: "The primary screening recovered 386 natural ingredients. In the first phase of the secondary screening, an evaluation system based on five criteria was established, in order to prioritize the ingredients with the most significant potential for development in the fungal bioindustry. Each criterion chosen is essential for assessing the technical, commercial, and regulatory viability of a product or intermediate. Each ingredient was rated on a scale of 1 to 5 for every criterion, and a specific percentage weight was assigned to each criterion, reflecting its strategic relevance in the total score. This system was designed to orient the selection toward candidates that, regardless of their current development state, present the most significant opportunities to drive the advancement of the fungi as a biofactory in the industry.",
+  ingredientsIntro: "Visually explore natural ingredients derived from endophytic fungi, including their properties, producing fungus, fermentation details and literature DOI. In certain instances, multiple entries may exist for the same ingredient, since different endophytic fungi can produce it."
+};
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<style>
+:root{
+  --brick:#9F4C3A; --brick-dark:#7E3A2C; --brick-hover:#8E4433;
+  --cream:#FCF3E1; --gold:#EBD4A0;
+  --ink:#1C1B1A; --muted:#6C6660; --faint:#9A938C;
+  --paper:#FFFFFF; --bg:#FBF9F6; --panel:#F1F3F6; --line:#EAE6DF;
+  --sidebar-w:264px;
+  --shadow:0 1px 2px rgba(28,27,26,.04), 0 10px 30px rgba(28,27,26,.06);
+}
+*{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Inter",system-ui,sans-serif;line-height:1.55;-webkit-font-smoothing:antialiased;}
+a{color:var(--brick);}
+h1,h2,h3{font-family:"Fraunces",Georgia,serif;letter-spacing:-.01em;}
+
+.app{display:flex;min-height:100vh;}
+.sidebar{width:var(--sidebar-w);flex:none;background:var(--brick);color:#fff;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;padding:22px 14px;overflow-y:auto;}
+.brand{display:flex;gap:10px;align-items:flex-start;padding:6px 8px 20px;cursor:pointer;}
+.brand-icon{font-size:20px;margin-top:2px;}
+.brand-name{font-family:"Fraunces",serif;font-weight:600;font-size:16px;line-height:1.2;}
+.nav-item{display:block;padding:9px 12px;border-radius:8px;color:#fff;text-decoration:none;font-size:14px;opacity:.85;cursor:pointer;transition:background .12s,opacity .12s;margin-bottom:2px;}
+.nav-item:hover{background:var(--brick-hover);opacity:1;}
+.nav-item.active{background:var(--brick-dark);opacity:1;font-weight:600;}
+.nav-eyebrow{padding:14px 12px 4px;font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;opacity:.65;}
+.sidebar-foot{margin-top:auto;padding:16px 12px 4px;font-size:12px;opacity:.7;line-height:1.5;}
+
+.main{flex:1;min-width:0;}
+.page{display:none;}
+.page.active{display:block;}
+.wrap{max-width:1180px;margin:0 auto;padding:44px 48px 90px;}
+.page-title{font-weight:700;font-size:clamp(30px,4.4vw,44px);line-height:1.04;margin:0 0 12px;}
+.page-sub{color:var(--muted);font-size:15.5px;margin:0 0 30px;max-width:80ch;}
+.breadcrumb{font-size:14px;color:var(--muted);margin:0 0 6px;}
+.breadcrumb b{color:var(--ink);font-weight:600;}
+
+/* loader */
+.loader{max-width:1180px;margin:0 auto;padding:16px 48px 0;display:none;}
+.loader.show{display:block;}
+.loader .box{background:var(--cream);border:1px solid var(--gold);border-radius:12px;padding:14px 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;}
+.loader .box p{margin:0;font-size:14px;color:var(--brick-dark);flex:1;min-width:200px;}
+.loader .box button{background:var(--brick);color:#fff;border:0;border-radius:8px;padding:9px 18px;font:inherit;font-weight:500;cursor:pointer;}
+.loader .box button:hover{background:var(--brick-dark);}
+
+/* hero */
+.hero{background:linear-gradient(160deg,var(--brick) 0%,var(--brick-dark) 100%);color:#fff;padding:74px 48px 64px;}
+.hero-inner{max-width:1180px;margin:0 auto;}
+.hero-eyebrow{font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;margin:0 0 18px;}
+.hero h1{color:#fff;font-weight:700;font-size:clamp(34px,5.4vw,58px);line-height:1.02;margin:0 0 20px;max-width:22ch;}
+.hero p{font-size:17px;opacity:.92;max-width:70ch;margin:0 0 34px;}
+.hero-search{display:flex;max-width:560px;background:#fff;border-radius:999px;padding:6px 6px 6px 20px;box-shadow:0 12px 34px rgba(0,0,0,.2);}
+.hero-search input{border:0;outline:0;flex:1;font:inherit;font-size:15px;color:var(--ink);background:none;}
+.hero-search button{border:0;background:var(--brick);color:#fff;font:inherit;font-weight:600;padding:11px 24px;border-radius:999px;cursor:pointer;}
+.hero-search button:hover{background:var(--brick-dark);}
+
+.counters{max-width:1180px;margin:-38px auto 0;padding:0 48px;position:relative;z-index:2;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px;}
+.counter{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:24px 26px;box-shadow:var(--shadow);}
+.counter-num{font-family:"Fraunces",serif;font-weight:700;font-size:44px;line-height:1;color:var(--brick);}
+.counter-label{color:var(--muted);font-size:13.5px;margin-top:8px;}
+
+.home-section{max-width:1180px;margin:0 auto;padding:56px 48px 0;}
+.home-section h2{font-weight:700;font-size:30px;margin:0 0 16px;}
+.home-section p{color:var(--muted);font-size:15.5px;max-width:82ch;}
+.home-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;margin-top:28px;}
+.home-card{border:1px solid var(--line);background:var(--paper);border-radius:14px;padding:26px;cursor:pointer;transition:transform .18s,box-shadow .18s;box-shadow:var(--shadow);}
+.home-card:hover{transform:translateY(-3px);box-shadow:0 4px 8px rgba(28,27,26,.05),0 18px 42px rgba(28,27,26,.10);}
+.home-card h3{font-size:19px;margin:0 0 8px;}
+.home-card p{font-size:14px;margin:0;}
+.home-card .arrow{color:var(--brick);font-weight:600;margin-top:14px;display:inline-block;font-size:14px;}
+
+/* panel + charts */
+.panel-intro{color:var(--muted);font-size:15px;max-width:88ch;margin:0 0 30px;}
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:22px;}
+.chart-card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:22px 24px;box-shadow:var(--shadow);}
+.chart-card .ctitle{font-family:"Fraunces",serif;font-weight:600;font-size:18px;line-height:1.2;margin:0 0 3px;color:var(--ink);}
+.chart-card .csub{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--faint);margin:0 0 14px;}
+.chart-wrap{position:relative;height:250px;}
+.chart-hint{font-size:12px;color:var(--faint);margin-top:8px;text-align:center;}
+.slice-list{margin-top:14px;border-top:1px solid var(--line);padding-top:12px;display:none;}
+.slice-list.show{display:block;}
+.slice-list h4{font-family:"Inter",sans-serif;font-size:13px;margin:0 0 8px;color:var(--ink);}
+.slice-list ul{margin:0;padding:0;list-style:none;max-height:200px;overflow-y:auto;}
+.slice-list li{font-size:13px;padding:5px 0;border-bottom:1px solid var(--line);color:var(--muted);}
+
+.rank-wrap{margin-bottom:34px;}
+.rank-toggle{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:12px 18px;font:inherit;font-size:14px;font-weight:500;color:var(--ink);cursor:pointer;display:flex;align-items:center;gap:8px;box-shadow:var(--shadow);}
+.rank-toggle svg{width:14px;height:14px;transition:transform .18s;}
+.rank-toggle.open svg{transform:rotate(90deg);}
+.rank-table{display:none;margin-top:14px;}
+.rank-table.open{display:block;}
+
+.divider{height:1px;background:var(--line);margin:36px 0;}
+
+/* toolbar */
+.toolbar{display:flex;gap:12px;align-items:center;margin-bottom:24px;flex-wrap:wrap;}
+.search{flex:1 1 260px;display:flex;align-items:center;gap:10px;background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:10px 18px;transition:border-color .15s,box-shadow .15s;}
+.search:focus-within{border-color:var(--brick);box-shadow:0 0 0 3px rgba(159,76,58,.12);}
+.search svg{width:16px;height:16px;color:var(--muted);flex:none;}
+.search input{border:0;outline:0;background:none;font:inherit;width:100%;color:var(--ink);}
+.count{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--muted);white-space:nowrap;}
+.count b{color:var(--ink);}
+
+/* generic table */
+.table-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--paper);box-shadow:var(--shadow);}
+table.tbl{width:100%;border-collapse:collapse;font-size:13.5px;}
+table.tbl th{text-align:left;background:#F7F4EF;font-weight:600;padding:12px 16px;position:sticky;top:0;white-space:nowrap;border-bottom:1px solid var(--line);}
+table.tbl td{padding:11px 16px;border-bottom:1px solid var(--line);vertical-align:top;}
+table.tbl td:last-child{text-align:right;}
+.pill{display:inline-block;min-width:34px;text-align:center;background:var(--cream);color:var(--brick-dark);border-radius:999px;padding:3px 11px;font-family:"IBM Plex Mono",monospace;font-size:12.5px;}
+
+/* cards */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px;}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:var(--shadow);cursor:pointer;transition:transform .18s,box-shadow .18s;display:flex;flex-direction:column;}
+.card:hover{transform:translateY(-3px);box-shadow:0 4px 8px rgba(28,27,26,.05),0 18px 42px rgba(28,27,26,.10);}
+.card.gallery{border-left:4px solid var(--gold);}
+.card-cover{aspect-ratio:16/11;background:#F7F7F5;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:10px;}
+.card-cover img{max-width:100%;max-height:100%;object-fit:contain;}
+.card-cover.empty{color:var(--faint);font-size:12px;font-family:"IBM Plex Mono",monospace;}
+.card-body{padding:20px;display:flex;flex-direction:column;gap:14px;}
+.card-name{font-family:"Fraunces",serif;font-weight:600;font-size:19px;line-height:1.18;margin:0;}
+.field-label{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);margin-bottom:2px;}
+.field-value{font-size:14px;color:var(--ink);}
+.field-value.sci{font-style:italic;}
+
+/* modal */
+.overlay{position:fixed;inset:0;background:rgba(28,27,26,.5);backdrop-filter:blur(3px);display:none;align-items:flex-start;justify-content:center;padding:40px 20px;z-index:50;overflow-y:auto;}
+.overlay.open{display:flex;}
+.modal{background:var(--paper);border-radius:16px;max-width:780px;width:100%;padding:40px 44px;position:relative;box-shadow:0 30px 80px rgba(0,0,0,.28);}
+.modal h2.modal-title{font-weight:700;font-size:30px;margin:0 0 8px;padding-right:40px;}
+.modal-rule{height:1px;background:var(--line);margin:14px 0 6px;}
+.modal-close{position:absolute;top:18px;right:18px;width:34px;height:34px;border-radius:8px;border:1px solid var(--line);background:var(--paper);cursor:pointer;font-size:18px;color:var(--muted);line-height:1;}
+.modal-close:hover{background:var(--bg);}
+.det-row{display:grid;grid-template-columns:180px 1fr;gap:20px;padding:15px 0;border-bottom:1px solid var(--line);}
+.det-row:last-child{border-bottom:0;}
+.det-key{font-weight:600;font-size:14px;}
+.det-val{font-size:14.5px;}
+.det-val.sci{font-style:italic;}
+.det-img{background:#F7F7F5;border-radius:12px;padding:16px;text-align:center;}
+.det-img img{max-width:100%;max-height:340px;object-fit:contain;}
+.det-list{margin:0;padding-left:18px;}
+.det-list li{margin:3px 0;}
+.checks{display:flex;flex-direction:column;gap:8px;}
+.check{display:flex;align-items:center;gap:10px;font-size:14.5px;}
+.box{width:17px;height:17px;border-radius:4px;border:1.5px solid var(--faint);flex:none;display:flex;align-items:center;justify-content:center;}
+.box.on{background:#2E6FE8;border-color:#2E6FE8;}
+.box.on::after{content:"";width:5px;height:9px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg);margin-top:-2px;}
+
+/* download */
+.dl-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;}
+.dl-card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:24px;box-shadow:var(--shadow);}
+.dl-card h3{font-size:18px;margin:0 0 6px;}
+.dl-card .rows{font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--faint);margin-bottom:16px;}
+.dl-btn{background:var(--brick);color:#fff;border:0;border-radius:9px;padding:10px 18px;font:inherit;font-weight:500;cursor:pointer;}
+.dl-btn:hover{background:var(--brick-dark);}
+.dl-btn.ghost{background:none;border:1px solid var(--line);color:var(--ink);}
+.dl-btn.ghost:hover{border-color:var(--brick);color:var(--brick);}
+
+.state{text-align:center;padding:60px 24px;color:var(--muted);}
+.state h2{color:var(--ink);font-weight:600;margin:0 0 8px;}
+.state code{font-family:"IBM Plex Mono",monospace;font-size:13px;background:var(--cream);color:var(--brick-dark);padding:2px 7px;border-radius:6px;}
+
+.menu-btn{display:none;}
+@media(max-width:860px){
+  .sidebar{position:fixed;left:0;top:0;transform:translateX(-100%);transition:transform .2s;z-index:60;}
+  .sidebar.open{transform:translateX(0);}
+  .menu-btn{display:inline-flex;align-items:center;gap:8px;position:sticky;top:0;z-index:40;background:var(--brick);color:#fff;border:0;width:100%;padding:12px 18px;font:inherit;font-weight:500;}
+  .wrap,.home-section,.counters,.hero{padding-left:20px;padding-right:20px;}
+  .det-row{grid-template-columns:1fr;gap:6px;}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto;}}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand" data-page="home"><span class="brand-icon">📖</span><span class="brand-name" id="brandName"></span></div>
+    <nav>
+      <div class="nav-eyebrow">Overview</div>
+      <a class="nav-item active" data-page="home">Home</a>
+      <a class="nav-item" data-page="screening">Secondary screening</a>
+      <div class="nav-eyebrow">Explore</div>
+      <a class="nav-item" data-page="ingredients">Ingredient gallery</a>
+      <a class="nav-item" data-page="catalog">Top Value-added catalog</a>
+      <div class="nav-eyebrow">Data</div>
+      <a class="nav-item" data-page="download">Download</a>
+    </nav>
+    <div class="sidebar-foot" id="sidebarFoot"></div>
+  </aside>
+
+  <div class="main">
+    <button class="menu-btn" id="menuBtn">☰ Menu</button>
+
+    <!-- HOME -->
+    <section class="page active" id="page-home">
+      <div class="loader" id="loader"><div class="box"><p id="loaderMsg">Loading data…</p><button type="button" id="loaderBtn">Upload Excel / CSV</button></div></div>
+      <div class="hero"><div class="hero-inner">
+        <p class="hero-eyebrow" id="heroEyebrow"></p>
+        <h1 id="heroTitle"></h1>
+        <p id="heroTagline"></p>
+        <div class="hero-search"><input id="heroSearch" type="search" placeholder="Search ingredients, fungi, bioactivity…" /><button id="heroSearchBtn">Search</button></div>
+      </div></div>
+      <div class="counters" id="counters"></div>
+      <div class="home-section">
+        <h2>Explore the database</h2>
+        <p id="homeIntro"></p>
+        <div class="home-cards">
+          <div class="home-card" data-page="screening"><h3>Secondary screening</h3><p>Five prioritization criteria shown as interactive pie charts — click a slice to list its ingredients.</p><span class="arrow">Open →</span></div>
+          <div class="home-card" data-page="ingredients"><h3>Ingredient gallery</h3><p>Every registered ingredient with its compound type, producing fungus, fermentation details and DOI.</p><span class="arrow">Open →</span></div>
+          <div class="home-card" data-page="catalog"><h3>Top Value-added catalog</h3><p>Priority ingredients shown with their molecular structure and producing endophytic fungi.</p><span class="arrow">Open →</span></div>
+          <div class="home-card" data-page="download"><h3>Download</h3><p>Download the full dataset for reuse and citation.</p><span class="arrow">Open →</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECONDARY SCREENING -->
+    <section class="page" id="page-screening"><div class="wrap">
+      <p class="breadcrumb">Overview <span style="opacity:.5">›</span> <b>Secondary screening</b></p>
+      <h1 class="page-title">Secondary Screening</h1>
+      <p class="panel-intro" id="screeningIntro"></p>
+      <div class="rank-wrap" id="rankWrap"></div>
+      <div class="charts" id="charts"></div>
+    </div></section>
+
+    <!-- INGREDIENTS -->
+    <section class="page" id="page-ingredients"><div class="wrap">
+      <p class="breadcrumb">Explore <span style="opacity:.5">›</span> <b>Ingredient gallery</b></p>
+      <h1 class="page-title">Ingredient gallery</h1>
+      <p class="page-sub" id="ingredientsIntro"></p>
+      <div class="toolbar"><label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input id="search-ing" type="search" placeholder="Search ingredients…" autocomplete="off" /></label><span class="count" id="count-ing"></span></div>
+      <div class="grid" id="grid-ing"></div>
+    </div></section>
+
+    <!-- CATALOG -->
+    <section class="page" id="page-catalog"><div class="wrap">
+      <p class="breadcrumb">Explore <span style="opacity:.5">›</span> <b>Top Value-added catalog</b></p>
+      <h1 class="page-title">Catalog of the Top Value-added Natural Ingredients</h1>
+      <p class="page-sub">The highest-priority ingredients, shown with their molecular structure and producing endophytic fungi. Click a card for the full record.</p>
+      <div class="toolbar"><label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input id="search-cat" type="search" placeholder="Search catalog…" autocomplete="off" /></label><span class="count" id="count-cat"></span></div>
+      <div class="grid" id="grid-cat"></div>
+    </div></section>
+
+    <!-- DOWNLOAD -->
+    <section class="page" id="page-download"><div class="wrap">
+      <p class="breadcrumb">Data <span style="opacity:.5">›</span> <b>Download</b></p>
+      <h1 class="page-title">Download the dataset</h1>
+      <p class="page-sub">Download the underlying data for reuse, verification and citation. Each sheet is available as a CSV file; the complete workbook is available as Excel.</p>
+      <div class="dl-grid" id="dlGrid"></div>
+    </div></section>
+
+    <div style="padding:0 48px 40px;max-width:1180px;margin:0 auto;font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--faint)" id="updated"></div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay"><div class="modal" id="modal"><button class="modal-close" id="modalClose" aria-label="Close">×</button><div id="modalBody"></div></div></div>
+<input type="file" id="filePicker" accept=".xlsx,.xls,.csv" style="display:none" />
+
+<script>
+const CHART_COLORS=["#4B4137","#8B7E70","#B69A82","#C7BA98","#E6DCC6","#D9C9A3","#6E6156","#5B5147"];
+const state={ sets:{summary:null,ingredients:null,screening:null,catalog:null} };
+
+/* helpers */
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function asText(v){if(v==null)return"";if(Array.isArray(v))return v.join(", ");return String(v);}
+function multiline(v){return esc(asText(v)).replace(/\n/g,"<br>");}
+function numify(v){return parseFloat(String(v).replace(",","."));}
+function norm(s){return String(s).toLowerCase().replace(/[^a-z0-9]/g,"");}
+function nonEmpty(v){return v!=null&&String(v).trim()!=="";}
+function safe(fn){try{fn();}catch(e){console.error(e);}}
+
+/* dataset object with tolerant column access */
+function makeSet(rows){
+  const cols=rows.length?Object.keys(rows[0]):[];
+  const map={};cols.forEach(c=>map[norm(c)]=c);
+  const g=(row,want)=>{const a=map[norm(want)];return a!=null?row[a]:undefined;};
+  return {rows,cols,map,get:g};
+}
+function imageSrc(v){const s=asText(v).trim();return s?s:null;}
+
+/* nav */
+function showPage(id){document.querySelectorAll(".page").forEach(p=>p.classList.toggle("active",p.id==="page-"+id));
+  document.querySelectorAll(".nav-item").forEach(n=>n.classList.toggle("active",n.dataset.page===id));
+  document.getElementById("sidebar").classList.remove("open");window.scrollTo(0,0);}
+document.querySelectorAll("[data-page]").forEach(n=>n.addEventListener("click",()=>showPage(n.dataset.page)));
+document.getElementById("menuBtn").addEventListener("click",()=>document.getElementById("sidebar").classList.toggle("open"));
+
+/* loader */
+function setLoader(msg,show){document.getElementById("loaderMsg").textContent=msg;document.getElementById("loader").classList.toggle("show",!!show);}
+
+/* ---------- COUNTERS (Summary sheet) ---------- */
+function renderCounters(){
+  const S=state.sets.summary, ING=state.sets.ingredients, SCR=state.sets.screening, CAT=state.sets.catalog;
+  const SF=CONFIG.summaryFields;
+  let ingredients=0,fungi=0;
+  if(S){ ingredients=S.rows.filter(r=>nonEmpty(S.get(r,SF.name))).length;
+          fungi=S.rows.filter(r=>nonEmpty(S.get(r,SF.fungus))).length; }
+  else if(ING){ ingredients=ING.rows.length; }
+  const criteria=SCR?criterionCols(SCR).length:0;
+  const topCount=CAT?CAT.rows.filter(r=>nonEmpty(CAT.get(r,CONFIG.catalogFields.name))).length:0;
+  const items=[
+    {n:ingredients, l:"Registered ingredients"},
+    {n:fungi,       l:"Endophytic fungi (strains)"},
+    {n:topCount,    l:"Top value-added candidates"},
+    {n:criteria,    l:"Evaluation criteria"}
+  ];
+  document.getElementById("counters").innerHTML=items.map(c=>`<div class="counter"><div class="counter-num">${c.n}</div><div class="counter-label">${esc(c.l)}</div></div>`).join("");
+}
+
+/* ---------- SECONDARY SCREENING ---------- */
+function criterionCols(SCR){return SCR.cols.filter(c=>norm(c).startsWith("criterion"));}
+function criterionTitle(col){const m=String(col).match(/criterion\s*(\d+)/i);const key=m?("Criterion "+m[1]):col;return CONFIG.criterionTitles[key]||col;}
+
+function renderScreening(){
+  document.getElementById("screeningIntro").textContent=CONFIG.screeningIntro;
+  const SCR=state.sets.screening;
+  const charts=document.getElementById("charts"), rankWrap=document.getElementById("rankWrap");
+  if(!SCR){charts.innerHTML=`<div class="state"><h2>No screening data</h2><p>The <code>Secondary screening</code> sheet was not found in your file.</p></div>`;rankWrap.innerHTML="";return;}
+  const SF=CONFIG.screeningFields;
+
+  /* Ranking by Final Weighted Score */
+  const hasFinal=SCR.cols.some(c=>norm(c)===norm(SF.finalScore));
+  if(hasFinal){
+    const ranked=[...SCR.rows].filter(r=>nonEmpty(SCR.get(r,SF.name))).sort((a,b)=>numify(SCR.get(b,SF.finalScore))-numify(SCR.get(a,SF.finalScore)));
+    const rowsHtml=ranked.map((r,i)=>`<tr><td>${i+1}</td><td>${esc(asText(SCR.get(r,SF.name)))}</td><td><span class="pill">${esc(asText(SCR.get(r,SF.finalScore)))}</span></td></tr>`).join("");
+    rankWrap.innerHTML=`<button class="rank-toggle" id="rankToggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg> Ranking by Final Weighted Score (${ranked.length})</button>
+      <div class="rank-table" id="rankTable"><div class="table-scroll"><table class="tbl"><thead><tr><th>#</th><th>Natural Ingredient</th><th>Final Weighted Score</th></tr></thead><tbody>${rowsHtml}</tbody></table></div></div>`;
+    const bt=document.getElementById("rankToggle"),tb=document.getElementById("rankTable");
+    bt.addEventListener("click",()=>{bt.classList.toggle("open");tb.classList.toggle("open");});
+  } else rankWrap.innerHTML="";
+
+  /* pie per criterion */
+  const crits=criterionCols(SCR);
+  charts.innerHTML="";
+  if(typeof Chart==="undefined"){charts.innerHTML=`<p style="color:var(--muted)">Charts need an internet connection to load. Everything else works offline.</p>`;return;}
+  crits.forEach(crit=>{
+    const counts={};SCR.rows.forEach(r=>{const v=SCR.get(r,crit);if(nonEmpty(v)){const k=String(v).trim();counts[k]=(counts[k]||0)+1;}});
+    const labels=Object.keys(counts).sort((a,b)=>numify(a)-numify(b));const data=labels.map(l=>counts[l]);
+    const card=document.createElement("div");card.className="chart-card";
+    card.innerHTML=`<p class="ctitle">${esc(criterionTitle(crit))}</p><p class="csub">${esc(crit)}</p>
+      <div class="chart-wrap"><canvas></canvas></div>
+      <p class="chart-hint">Click a slice to list its ingredients</p>
+      <div class="slice-list"><h4></h4><ul></ul></div>`;
+    charts.appendChild(card);
+    const listBox=card.querySelector(".slice-list"),listH=card.querySelector(".slice-list h4"),listUl=card.querySelector(".slice-list ul");
+    const chart=new Chart(card.querySelector("canvas"),{type:"pie",
+      data:{labels,datasets:[{data,backgroundColor:labels.map((_,j)=>CHART_COLORS[j%CHART_COLORS.length]),borderColor:"#fff",borderWidth:2}]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{position:"right",labels:{boxWidth:10,boxHeight:10,font:{family:"Inter",size:12},color:"#6C6660",padding:9}},
+          tooltip:{callbacks:{label:c=>{const t=data.reduce((a,b)=>a+b,0);return ` Score ${c.label}: ${c.raw} records (${(c.raw/t*100).toFixed(1)}%)`;}}}},
+        onClick:(evt,els)=>{if(!els.length)return;const label=labels[els[0].index];
+          const names=SCR.rows.filter(r=>String(SCR.get(r,crit)).trim()===label && nonEmpty(SCR.get(r,SF.name))).map(r=>asText(SCR.get(r,SF.name)));
+          listH.textContent=`${names.length} ingredient(s) rated ${label}`;
+          listUl.innerHTML=names.map(n=>`<li>${esc(n)}</li>`).join("");
+          listBox.classList.add("show");}
+      }});
+  });
+}
+
+/* ---------- INGREDIENTS (gallery + modal) ---------- */
+function ingCard(r,idx){
+  const G=state.sets.ingredients.get, IF=CONFIG.ingredientFields;
+  const name=asText(G(r,IF.name)),type=asText(G(r,IF.type)),fungus=asText(G(r,IF.fungus)),bio=asText(G(r,IF.bioactivity));
+  return `<article class="card gallery" data-set="ingredients" data-idx="${idx}"><div class="card-body">
+    <h3 class="card-name">${esc(name)}</h3>
+    ${type?`<div><div class="field-label">Type of Compound</div><div class="field-value">${esc(type)}</div></div>`:""}
+    ${fungus?`<div><div class="field-label">Producing Endophytic Fungus</div><div class="field-value sci">${multiline(fungus)}</div></div>`:""}
+    ${bio?`<div><div class="field-label">Reported Bioactivity</div><div class="field-value">${multiline(bio)}</div></div>`:""}
+  </div></article>`;
+}
+function renderIngredients(list){
+  const ING=state.sets.ingredients, grid=document.getElementById("grid-ing");
+  if(!ING){grid.innerHTML=`<div class="state"><h2>No ingredient data</h2><p>The <code>Ingredients</code> sheet was not found.</p></div>`;document.getElementById("count-ing").textContent="";return;}
+  grid.innerHTML=list.map(o=>ingCard(o.row,o.idx)).join("");
+  document.getElementById("count-ing").innerHTML=`<b>${list.length}</b> entries`;
+  bindCards(grid);
+}
+function ingredientRows(){return state.sets.ingredients?state.sets.ingredients.rows.map((row,idx)=>({row,idx})):[];}
+
+/* ---------- CATALOG (cards + modal) ---------- */
+function catalogRows(){
+  const CAT=state.sets.catalog;if(!CAT)return[];
+  const CF=CONFIG.catalogFields;
+  let rows=CAT.rows.map((row,idx)=>({row,idx})).filter(o=>nonEmpty(CAT.get(o.row,CF.name)));
+  rows.sort((a,b)=>{const oa=numify(CAT.get(a.row,CF.order)),ob=numify(CAT.get(b.row,CF.order));
+    if(!isNaN(oa)&&!isNaN(ob))return oa-ob;return 0;});
+  return rows;
+}
+function catCard(r,idx){
+  const G=state.sets.catalog.get, CF=CONFIG.catalogFields;
+  const name=asText(G(r,CF.name)),fungus=asText(G(r,CF.fungus)),img=imageSrc(G(r,CF.image));
+  return `<article class="card" data-set="catalog" data-idx="${idx}">
+    ${img?`<div class="card-cover"><img loading="lazy" src="${esc(img)}" alt="Structure of ${esc(name)}" onerror="this.parentNode.classList.add('empty');this.parentNode.textContent='image not found'"></div>`:`<div class="card-cover empty">no image</div>`}
+    <div class="card-body"><h3 class="card-name">${esc(name)}</h3>${fungus?`<div class="field-value sci">${multiline(fungus)}</div>`:""}</div></article>`;
+}
+function renderCatalog(list){
+  const CAT=state.sets.catalog, grid=document.getElementById("grid-cat");
+  if(!CAT){grid.innerHTML=`<div class="state"><h2>No catalog data</h2><p>The <code>Catalog of the Top Value-added</code> sheet was not found.</p></div>`;document.getElementById("count-cat").textContent="";return;}
+  grid.innerHTML=list.map(o=>catCard(o.row,o.idx)).join("");
+  document.getElementById("count-cat").innerHTML=`<b>${list.length}</b> ingredients`;
+  bindCards(grid);
+}
+
+/* ---------- MODAL ---------- */
+function row(k,v){return `<div class="det-row"><div class="det-key">${esc(k)}</div><div class="det-val">${v}</div></div>`;}
+function bullets(v){const items=asText(v).split("\n").map(s=>s.trim()).filter(Boolean);
+  return items.length>1?`<ul class="det-list">${items.map(i=>`<li>${esc(i)}</li>`).join("")}</ul>`:esc(asText(v));}
+function areasChecks(v){const raw=Array.isArray(v)?v.map(String):(v?String(v).split(","):[]).map(s=>s.trim());const nn=s=>s.toLowerCase().replace(/[.\s]/g,"");const sel=raw.map(nn);
+  return `<div class="checks">${CONFIG.areaOptions.map(o=>`<div class="check"><span class="box ${sel.includes(nn(o))?"on":""}"></span>${esc(o)}</div>`).join("")}</div>`;}
+function refLink(v){const s=asText(v).trim();if(!s)return null;
+  if(/^10\.\S+/.test(s))return `<a href="https://doi.org/${esc(s)}" target="_blank" rel="noopener">https://doi.org/${esc(s)}</a>`;
+  if(/^https?:/.test(s))return `<a href="${esc(s)}" target="_blank" rel="noopener">${esc(s)}</a>`;
+  return esc(s);}
+
+function openModal(setName,idx){
+  const S=state.sets[setName];if(!S)return;const r=S.rows[idx];if(!r)return;const G=S.get;
+  let title="",rows=[];
+  if(setName==="ingredients"){
+    const IF=CONFIG.ingredientFields;title=asText(G(r,IF.name));
+    const pairs=[["Type of Compound",IF.type],["Reported Bioactivity",IF.bioactivity,"bul"],
+      ["Producing Endophytic Fungus",IF.fungus,"sci"],["Type of Fermentation",IF.fermentationType],
+      ["Fermentation Strategy",IF.fermentationStrategy],["Reactor Configuration",IF.reactor],["Culture Medium",IF.medium]];
+    pairs.forEach(([label,key,mode])=>{const v=G(r,key);if(!nonEmpty(v))return;
+      rows.push(row(label,mode==="bul"?bullets(v):mode==="sci"?`<span class="sci">${multiline(v)}</span>`:multiline(v)));});
+    // DOI, o Reference si no hay DOI
+    const doi=G(r,IF.doi),ref=G(r,IF.reference);
+    if(nonEmpty(doi))rows.push(row("DOI",refLink(doi)));
+    else if(nonEmpty(ref))rows.push(row("Reference",refLink(ref)));
+  } else if(setName==="catalog"){
+    const CF=CONFIG.catalogFields;title=asText(G(r,CF.name));
+    const img=imageSrc(G(r,CF.image));
+    if(img)rows.push(row("Structure",`<div class="det-img"><img src="${esc(img)}" alt="" onerror="this.style.display='none'"></div>`));
+    if(nonEmpty(G(r,CF.score)))rows.push(row("Score",`<span class="pill">${esc(asText(G(r,CF.score)))}</span>`));
+    if(nonEmpty(G(r,CF.type)))rows.push(row("Type of compound",esc(asText(G(r,CF.type)))));
+    if(nonEmpty(G(r,CF.fungus)))rows.push(row("Producing endophytic fungus",`<span class="sci">${multiline(G(r,CF.fungus))}</span>`));
+    if(nonEmpty(G(r,CF.bioactivity)))rows.push(row("Bioactivity",bullets(G(r,CF.bioactivity))));
+    if(nonEmpty(G(r,CF.areas)))rows.push(row("Areas of interest",areasChecks(G(r,CF.areas))));
+    if(nonEmpty(G(r,CF.reference)))rows.push(row("Reference",refLink(G(r,CF.reference))));
+  }
+  document.getElementById("modalBody").innerHTML=`<h2 class="modal-title">${esc(title)}</h2><div class="modal-rule"></div>${rows.join("")}`;
+  document.getElementById("overlay").classList.add("open");document.body.style.overflow="hidden";
+}
+function closeModal(){document.getElementById("overlay").classList.remove("open");document.body.style.overflow="";}
+document.getElementById("modalClose").addEventListener("click",closeModal);
+document.getElementById("overlay").addEventListener("click",e=>{if(e.target.id==="overlay")closeModal();});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closeModal();});
+function bindCards(grid){grid.querySelectorAll(".card").forEach(c=>c.addEventListener("click",()=>openModal(c.dataset.set,parseInt(c.dataset.idx,10))));}
+
+/* ---------- SEARCH ---------- */
+function wireSearch(inputId,rowsFn,renderFn,getFn){
+  document.getElementById(inputId).addEventListener("input",e=>{const q=e.target.value.trim().toLowerCase();
+    if(!q){renderFn(rowsFn());return;}
+    renderFn(rowsFn().filter(o=>JSON.stringify(o.row).toLowerCase().includes(q)));});
+}
+function heroSearch(){const q=document.getElementById("heroSearch").value;document.getElementById("search-ing").value=q;
+  renderIngredients(q?ingredientRows().filter(o=>JSON.stringify(o.row).toLowerCase().includes(q.toLowerCase())):ingredientRows());showPage("ingredients");}
+document.getElementById("heroSearchBtn").addEventListener("click",heroSearch);
+document.getElementById("heroSearch").addEventListener("keydown",e=>{if(e.key==="Enter")heroSearch();});
+
+/* ---------- DOWNLOAD ---------- */
+function toCSV(rows){if(!rows.length)return"";const cols=Object.keys(rows[0]);
+  const cell=v=>{v=v==null?"":String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+  return [cols.map(cell).join(",")].concat(rows.map(r=>cols.map(c=>cell(r[c])).join(","))).join("\n");}
+function downloadText(filename,text,mime){const blob=new Blob([text],{type:mime||"text/plain"});const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);}
+function renderDownload(){
+  const grid=document.getElementById("dlGrid");
+  const defs=[["Summary","summary"],["Ingredients","ingredients"],["Secondary screening","screening"],["Catalog of the Top Value-added","catalog"]];
+  let html="";
+  defs.forEach(([label,key])=>{const S=state.sets[key];if(!S)return;
+    html+=`<div class="dl-card"><h3>${esc(label)}</h3><div class="rows">${S.rows.length} rows · ${S.cols.length} columns</div>
+      <button class="dl-btn" data-dl="${key}">Download CSV</button></div>`;});
+  const anyXlsx=typeof XLSX!=="undefined"&&Object.values(state.sets).some(Boolean);
+  if(anyXlsx)html+=`<div class="dl-card"><h3>Complete workbook</h3><div class="rows">All sheets in one Excel file</div><button class="dl-btn ghost" id="dlAll">Download Excel (.xlsx)</button></div>`;
+  grid.innerHTML=html;
+  grid.querySelectorAll("[data-dl]").forEach(b=>b.addEventListener("click",()=>{const S=state.sets[b.dataset.dl];downloadText(b.dataset.dl+".csv",toCSV(S.rows),"text/csv;charset=utf-8");}));
+  const all=document.getElementById("dlAll");
+  if(all)all.addEventListener("click",()=>{const wb=XLSX.utils.book_new();
+    const names={summary:"Summary",ingredients:"Ingredients",screening:"Secondary screening",catalog:"Catalog Top Value-added"};
+    Object.entries(state.sets).forEach(([k,S])=>{if(S)XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(S.rows),names[k]);});
+    XLSX.writeFile(wb,"NIEF_database.xlsx");});
+}
+
+/* ---------- BUILD ---------- */
+function assignSheets(workbook){
+  const names=Object.keys(workbook);
+  const taken={};
+  for(const key in CONFIG.sheetMatch){
+    const rx=CONFIG.sheetMatch[key];
+    const found=names.find(n=>!taken[n]&&rx.test(n));
+    if(found){taken[found]=true;state.sets[key]=makeSet(workbook[found]);}
+  }
+}
+function buildAll(){
+  safe(renderCounters);
+  safe(renderScreening);
+  safe(()=>renderIngredients(ingredientRows()));
+  safe(()=>renderCatalog(catalogRows()));
+  safe(renderDownload);
+  safe(()=>wireSearch("search-ing",ingredientRows,renderIngredients));
+  safe(()=>wireSearch("search-cat",catalogRows,renderCatalog));
+  setLoader("",false);
+}
+function loadWorkbook(sheetsObj){
+  const keys=Object.keys(sheetsObj);
+  if(!keys.length){setLoader("El archivo no tiene hojas legibles.",true);return;}
+  assignSheets(sheetsObj);
+  if(!Object.values(state.sets).some(Boolean)){
+    // no coincidió por nombre: usar la primera hoja como Ingredients
+    state.sets.ingredients=makeSet(sheetsObj[keys[0]]);
+  }
+  buildAll();
+}
+
+/* parsers */
+function detectDelim(line){const c=(line.match(/,/g)||[]).length,s=(line.match(/;/g)||[]).length,t=(line.match(/\t/g)||[]).length;if(t>=c&&t>=s&&t>0)return"\t";if(s>c)return";";return",";}
+function parseCSV(text){text=text.replace(/^\uFEFF/,"");const nl=text.indexOf("\n");const D=detectDelim(nl>-1?text.slice(0,nl):text);
+  const rows=[];let row=[],field="",i=0,inQ=false;
+  while(i<text.length){const ch=text[i];
+    if(inQ){if(ch==='"'){if(text[i+1]==='"'){field+='"';i+=2;continue;}inQ=false;i++;continue;}field+=ch;i++;continue;}
+    if(ch==='"'){inQ=true;i++;continue;}
+    if(ch===D){row.push(field);field="";i++;continue;}
+    if(ch==='\r'){i++;continue;}
+    if(ch==='\n'){row.push(field);rows.push(row);row=[];field="";i++;continue;}
+    field+=ch;i++;}
+  if(field.length||row.length){row.push(field);rows.push(row);}
+  if(!rows.length)return[];const headers=rows[0].map(h=>String(h).trim());
+  return rows.slice(1).map(r=>{const o={};headers.forEach((h,idx)=>o[h]=r[idx]!=null?r[idx]:"");return o;}).filter(o=>Object.values(o).some(v=>String(v).trim()!==""));}
+
+function handleXLSX(buf){
+  if(typeof XLSX==="undefined"){setLoader("Para leer Excel se necesita conexión a internet (para cargar la librería). Si estás sin conexión, exporta cada hoja como CSV.",true);return;}
+  try{const wb=XLSX.read(buf,{type:"array"});const obj={};
+    wb.SheetNames.forEach(n=>{obj[n]=XLSX.utils.sheet_to_json(wb.Sheets[n],{defval:"",raw:false}).filter(o=>Object.values(o).some(v=>String(v).trim()!==""));});
+    loadWorkbook(obj);
+  }catch(err){setLoader("No pude leer el Excel: "+err.message,true);}
+}
+function handleCSV(text){try{loadWorkbook({"Sheet1":parseCSV(text)});}catch(err){setLoader("No pude leer el CSV: "+err.message,true);}}
+
+document.getElementById("loaderBtn").addEventListener("click",()=>document.getElementById("filePicker").click());
+document.getElementById("filePicker").addEventListener("change",e=>{const file=e.target.files[0];if(!file)return;setLoader("Reading "+file.name+"…",true);
+  const rd=new FileReader();rd.onerror=()=>setLoader("No se pudo leer el archivo.",true);
+  if(/\.(xlsx|xls)$/i.test(file.name)){rd.onload=()=>handleXLSX(new Uint8Array(rd.result));rd.readAsArrayBuffer(file);}
+  else{rd.onload=()=>handleCSV(rd.result);rd.readAsText(file);}});
+
+async function tryFetch(name){const res=await fetch(name,{cache:"no-store"});if(!res.ok)throw new Error("not found");
+  if(/\.(xlsx|xls)$/i.test(name)){handleXLSX(new Uint8Array(await res.arrayBuffer()));}else{handleCSV(await res.text());}}
+
+async function init(){
+  document.getElementById("brandName").textContent=CONFIG.projectShort||CONFIG.projectName;
+  document.getElementById("heroEyebrow").textContent=(CONFIG.projectShort||"")+" · Open database";
+  document.getElementById("heroTitle").textContent=CONFIG.projectName;
+  document.getElementById("heroTagline").textContent=CONFIG.tagline;
+  document.getElementById("homeIntro").textContent=CONFIG.ingredientsIntro;
+  document.getElementById("ingredientsIntro").textContent=CONFIG.ingredientsIntro;
+  document.getElementById("sidebarFoot").textContent=CONFIG.projectName;
+  setLoader("Loading data…",true);
+  for(const name of CONFIG.dataFiles){try{await tryFetch(name);return;}catch(e){}}
+  setLoader("Sube tu archivo de Excel (.xlsx con tus hojas) o CSV para ver el sitio: pulsa el botón.",true);
+}
+init();
+</script>
+</body>
+</html>
